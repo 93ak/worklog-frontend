@@ -52,12 +52,12 @@ function AppRoutes() {
           />
           <Route 
             path="/forgot-password"       
-            element={user ? <Navigate to={home} replace /> : <ForgotPasswordPage />
+            element={user ? <Navigate to={'admin' ? '/admin' : '/dashboard'} replace /> : <ForgotPasswordPage />
             } 
           />
           <Route 
             path="/reset-password/:token"
-            element={user ? <Navigate to={home} replace /> : <ResetPasswordPage />
+            element={user ? <Navigate to={'admin' ? '/admin' : '/dashboard'} replace /> : <ResetPasswordPage />
             } 
           />
           <Route
