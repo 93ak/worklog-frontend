@@ -6,6 +6,8 @@ import LoginPage from './pages/LoginPage';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import CalendarView from './pages/CalendarView';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function ProtectedRoute({ children, requiredRole }) {
   const { user, loading } = useAuth();
@@ -47,6 +49,16 @@ function AppRoutes() {
           <Route
             path="/login"
             element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace /> : <LoginPage />}
+          />
+          <Route 
+            path="/forgot-password"       
+            element={user ? <Navigate to={home} replace /> : <ForgotPasswordPage />
+            } 
+          />
+          <Route 
+            path="/reset-password/:token"
+            element={user ? <Navigate to={home} replace /> : <ResetPasswordPage />
+            } 
           />
           <Route
             path="/dashboard"

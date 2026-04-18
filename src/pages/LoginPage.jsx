@@ -79,7 +79,11 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-
+        <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13 }}>
+          <a href="/forgot-password" style={{ color: 'var(--accent)' }}>
+            Forgot password?
+          </a>
+        </p>    
         <p style={styles.hint}>
           Access is restricted to company employees.
           <br />Contact your admin if you need an account.

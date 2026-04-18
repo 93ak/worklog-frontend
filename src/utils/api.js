@@ -35,6 +35,10 @@ export const authAPI = {
   login: (username, password) =>
     request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   me: () => request('/auth/me'),
+  requestReset:  (email)           => 
+    request('/auth/request-reset',  { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token, password) => 
+    request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
 };
 
 // ── Logs ──────────────────────────────────────────────────────────────────────
