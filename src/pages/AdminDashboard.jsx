@@ -12,6 +12,7 @@ import DateRangePicker from '../components/DateRangePicker';
 import SearchFilter from '../components/SearchFilter';
 import DayDrillDown from '../components/DayDrillDown';
 import EmployeeAnalyticsModal from '../components/EmployeeAnalyticsModal';
+import MyLogPanel from '../components/MyLogPanel';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -114,7 +115,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Main layout: table + optional drill-down panel */}
+      {/* Main layout: table + optional drill-down panel + my log panel */}
       <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
         {/* Employee table */}
         <div className="card" style={{ flex: 1, minWidth: 0 }}>
@@ -246,6 +247,9 @@ export default function AdminDashboard() {
             }}
           />
         )}
+
+        {/* Admin's own log panel */}
+        <MyLogPanel />
       </div>
     </>
   );
