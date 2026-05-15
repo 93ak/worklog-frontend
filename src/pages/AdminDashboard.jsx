@@ -1,52 +1,91 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// AdminDashboard.jsx — Team overview with date range, drill-down, analytics
+// ─────────────────────────────────────────────────────────────────────────────
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI } from '../utils/api';
+import { useDateRange } from '../context/DateRangeContext';
+import { useFilter } from '../hooks/useFilter';
+import { formatRangeLabel, todayStr } from '../utils/dateRange';
+import DateRangePicker from '../components/DateRangePicker';
+import SearchFilter from '../components/SearchFilter';
+import DayDrillDown from '../components/DayDrillDown';
+import EmployeeAnalyticsModal from '../components/EmployeeAnalyticsModal';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { range } = useDateRange();
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState('all'); // 'all' | 'submitted' | 'missing'
 
+  // Drill-down: selected date for day detail panel
+  const [drillDate, setDrillDate] = useState(null);
+
+  // Analytics modal
+  const [analyticsId, setAnalyticsId] = useState(null);
+
+  // ── Fetch overview whenever date range changes ─────────────────────────────
   const fetchOverview = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      const res = await adminAPI.getOverview();
+      const res = await adminAPI.getOverview({ start: range.start, end: range.end });
       setData(res);
     } catch (err) {
       setError(err.message || 'Failed to load overview');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [range.start, range.end]);
 
   useEffect(() => {
     fetchOverview();
   }, [fetchOverview]);
 
+  // ── Employee list + filter ─────────────────────────────────────────────────
   const employees = data?.employees || [];
-  const submitted = employees.filter((e) => e.submittedToday);
-  const missing = employees.filter((e) => !e.submittedToday);
+  const { search, setSearch, status, setStatus, filtered, counts } = useFilter(employees);
 
-  const filtered =
-    filter === 'submitted' ? submitted
-    : filter === 'missing' ? missing
-    : employees;
-
+  const submittedCount = counts.submitted;
   const submittedPct = employees.length
-    ? Math.round((submitted.length / employees.length) * 100)
+    ? Math.round((submittedCount / employees.length) * 100)
     : 0;
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  function handleEmployeeClick(empId) {
+    setAnalyticsId(empId);
+  }
+
+  function handleDrillClose() {
+    setDrillDate(null);
+  }
+
+  const isSingleDay = range.start === range.end;
+  const rangeLabel = formatRangeLabel(range.start, range.end);
 
   return (
     <>
-      <div className="page-header">
-        <h1>Team Overview</h1>
-        <p>
-          {data?.date || new Date().toISOString().split('T')[0]} — Daily submission status
-        </p>
+      {/* Analytics modal */}
+      {analyticsId && (
+        <EmployeeAnalyticsModal
+          employeeId={analyticsId}
+          onClose={() => setAnalyticsId(null)}
+        />
+      )}
+
+      {/* Page header with date range picker */}
+      <div style={styles.pageTop}>
+        <div className="page-header" style={{ marginBottom: 0 }}>
+          <h1>Team Overview</h1>
+          <p className="mono">{rangeLabel} — Submission status</p>
+        </div>
+        <DateRangePicker />
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="alert alert-error" style={{ marginTop: 16 }}>{error}</div>}
 
       {/* Summary cards */}
       <div style={styles.summaryGrid}>
@@ -55,11 +94,11 @@ export default function AdminDashboard() {
           <span style={styles.summaryLabel}>Total employees</span>
         </div>
         <div style={{ ...styles.summaryCard, borderColor: 'rgba(61,214,140,0.3)' }}>
-          <span style={{ ...styles.summaryNum, color: 'var(--green)' }}>{submitted.length}</span>
-          <span style={styles.summaryLabel}>Submitted today</span>
+          <span style={{ ...styles.summaryNum, color: 'var(--green)' }}>{submittedCount}</span>
+          <span style={styles.summaryLabel}>Submitted</span>
         </div>
         <div style={{ ...styles.summaryCard, borderColor: 'rgba(247,111,111,0.3)' }}>
-          <span style={{ ...styles.summaryNum, color: 'var(--red)' }}>{missing.length}</span>
+          <span style={{ ...styles.summaryNum, color: 'var(--red)' }}>{counts.missing}</span>
           <span style={styles.summaryLabel}>Not submitted</span>
         </div>
         <div style={{ ...styles.summaryCard, borderColor: 'rgba(245,166,35,0.3)' }}>
@@ -75,102 +114,137 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Employee table */}
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <div className="card-title">Employees</div>
-            <div className="card-subtitle">Click a row to view their log calendar</div>
+      {/* Main layout: table + optional drill-down panel */}
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        {/* Employee table */}
+        <div className="card" style={{ flex: 1, minWidth: 0 }}>
+          <div className="card-header" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div className="card-title">Employees</div>
+              <div className="card-subtitle">
+                {isSingleDay
+                  ? 'Click a row to open analytics · Click a date on the calendar for drill-down'
+                  : `Showing any submission within ${rangeLabel}`}
+              </div>
+            </div>
+            <SearchFilter
+              search={search}
+              onSearch={setSearch}
+              status={status}
+              onStatus={setStatus}
+              counts={counts}
+            />
           </div>
-          {/* Filter tabs */}
-          <div style={styles.filterTabs}>
-            {['all', 'submitted', 'missing'].map((f) => (
+
+          {loading ? (
+            <div className="loading-center">
+              <div className="spinner" />
+              <span>Loading team data…</span>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">👥</div>
+              <p>No employees found for this filter.</p>
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Username</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((emp) => (
+                    <tr
+                      key={emp._id}
+                      onClick={() => handleEmployeeClick(emp._id)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td>
+                        <div style={styles.empName}>
+                          <div style={styles.avatar}>
+                            {(emp.displayName || emp.username).charAt(0).toUpperCase()}
+                          </div>
+                          <span className="fw-500">
+                            {emp.displayName || emp.username}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="mono text-secondary" style={{ fontSize: 12 }}>
+                          {emp.username}
+                        </span>
+                      </td>
+                      <td>
+                        {emp.submittedToday ? (
+                          <span className="badge badge-green">
+                            <span className="status-dot green" />
+                            Submitted
+                          </span>
+                        ) : (
+                          <span className="badge badge-red">
+                            <span className="status-dot red" />
+                            Missing
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/admin/employee/${emp._id}`);
+                            }}
+                          >
+                            Calendar
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEmployeeClick(emp._id);
+                            }}
+                          >
+                            Analytics
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Today drill-down shortcut — only when single day selected */}
+          {isSingleDay && !loading && (
+            <div style={styles.drillShortcut}>
               <button
-                key={f}
-                className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ textTransform: 'capitalize' }}
-                onClick={() => setFilter(f)}
+                className="btn btn-ghost btn-sm"
+                onClick={() => setDrillDate(range.start)}
+                style={{ fontSize: '12px', color: 'var(--accent)' }}
               >
-                {f === 'all' ? `All (${employees.length})`
-                  : f === 'submitted' ? `✓ Submitted (${submitted.length})`
-                  : `✗ Missing (${missing.length})`}
+                📅 View {range.start === todayStr() ? "today's" : rangeLabel} submission detail
               </button>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
 
-        {loading ? (
-          <div className="loading-center">
-            <div className="spinner" />
-            <span>Loading team data…</span>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">👥</div>
-            <p>No employees found in this filter.</p>
-          </div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Employee</th>
-                  <th>Username</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((emp) => (
-                  <tr
-                    key={emp._id}
-                    onClick={() => navigate(`/admin/employee/${emp._id}`)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <td>
-                      <div style={styles.empName}>
-                        <div style={styles.avatar}>
-                          {(emp.displayName || emp.username).charAt(0).toUpperCase()}
-                        </div>
-                        <span className="fw-500">
-                          {emp.displayName || emp.username}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="mono text-secondary" style={{ fontSize: 12 }}>
-                        {emp.username}
-                      </span>
-                    </td>
-                    <td>
-                      {emp.submittedToday ? (
-                        <span className="badge badge-green">
-                          <span className="status-dot green" />
-                          Submitted
-                        </span>
-                      ) : (
-                        <span className="badge badge-red">
-                          <span className="status-dot red" />
-                          Missing
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/admin/employee/${emp._id}`);
-                        }}
-                      >
-                        View calendar →
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {/* Day drill-down panel */}
+        {drillDate && (
+          <DayDrillDown
+            date={drillDate}
+            onClose={handleDrillClose}
+            onEmployeeClick={(id) => {
+              handleDrillClose();
+              setAnalyticsId(id);
+            }}
+          />
         )}
       </div>
     </>
@@ -178,6 +252,14 @@ export default function AdminDashboard() {
 }
 
 const styles = {
+  pageTop: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    gap: 16,
+    flexWrap: 'wrap',
+  },
   summaryGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
@@ -220,10 +302,6 @@ const styles = {
     borderRadius: 99,
     transition: 'width 0.6s ease',
   },
-  filterTabs: {
-    display: 'flex',
-    gap: 8,
-  },
   empName: {
     display: 'flex',
     alignItems: 'center',
@@ -243,5 +321,11 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+  },
+  drillShortcut: {
+    borderTop: '1px solid var(--border)',
+    padding: '12px 0 0 0',
+    marginTop: 16,
+    textAlign: 'center',
   },
 };

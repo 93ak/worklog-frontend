@@ -1,6 +1,11 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// CalendarView.jsx — Per-employee log calendar with analytics modal access
+// ─────────────────────────────────────────────────────────────────────────────
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { adminAPI } from '../utils/api';
+import EmployeeAnalyticsModal from '../components/EmployeeAnalyticsModal';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -9,7 +14,6 @@ const MONTHS = [
 ];
 
 function buildCalendarGrid(year, month) {
-  // month is 0-indexed
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells = [];
@@ -32,7 +36,8 @@ export default function CalendarView() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedDay, setSelectedDay] = useState(null); // { dateStr, content }
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -46,15 +51,11 @@ export default function CalendarView() {
     }
   }, [id]);
 
-  useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
   const logMap = {};
   if (data?.logs) {
-    data.logs.forEach((l) => {
-      logMap[l.date] = l;
-    });
+    data.logs.forEach((l) => { logMap[l.date] = l; });
   }
 
   const cells = buildCalendarGrid(year, month);
@@ -87,22 +88,39 @@ export default function CalendarView() {
 
   return (
     <>
+      {showAnalytics && (
+        <EmployeeAnalyticsModal
+          employeeId={id}
+          onClose={() => setShowAnalytics(false)}
+        />
+      )}
+
       <div style={styles.backRow}>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/admin')}>
           ← Back to dashboard
         </button>
       </div>
 
-      <div className="page-header">
-        <h1>
-          {loading ? 'Loading…' : (employee?.displayName || employee?.username || 'Employee')}
-        </h1>
-        <p>
-          {employee?.username && (
-            <span className="mono">@{employee.username} · </span>
-          )}
-          Log calendar view
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+        <div className="page-header" style={{ marginBottom: 0 }}>
+          <h1>
+            {loading ? 'Loading…' : (employee?.displayName || employee?.username || 'Employee')}
+          </h1>
+          <p>
+            {employee?.username && (
+              <span className="mono">@{employee.username} · </span>
+            )}
+            Log calendar view
+          </p>
+        </div>
+        {!loading && (
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowAnalytics(true)}
+          >
+            📊 Analytics
+          </button>
+        )}
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -116,16 +134,12 @@ export default function CalendarView() {
         <div style={styles.layout}>
           {/* Calendar */}
           <div className="card" style={{ flex: 1 }}>
-            {/* Month nav */}
             <div style={styles.monthNav}>
               <button className="btn btn-ghost btn-sm" onClick={prevMonth}>‹</button>
-              <span style={styles.monthLabel}>
-                {MONTHS[month]} {year}
-              </span>
+              <span style={styles.monthLabel}>{MONTHS[month]} {year}</span>
               <button className="btn btn-ghost btn-sm" onClick={nextMonth}>›</button>
             </div>
 
-            {/* Stats strip */}
             <div style={styles.statsStrip}>
               <span style={styles.stripItem}>
                 <span style={styles.stripNum}>{monthLogs}</span>
@@ -138,13 +152,10 @@ export default function CalendarView() {
               </span>
             </div>
 
-            {/* Day headers */}
             <div style={styles.calGrid}>
               {DAYS.map((d) => (
                 <div key={d} style={styles.dayHeader}>{d}</div>
               ))}
-
-              {/* Cells */}
               {cells.map((day, idx) => {
                 if (!day) return <div key={`empty-${idx}`} />;
                 const dateStr = toDateStr(year, month, day);
@@ -174,7 +185,6 @@ export default function CalendarView() {
               })}
             </div>
 
-            {/* Legend */}
             <div style={styles.legend}>
               <span style={styles.legendItem}>
                 <span style={{ ...styles.legendDot, background: 'var(--green)' }} />
@@ -239,163 +249,29 @@ export default function CalendarView() {
 }
 
 const styles = {
-  backRow: {
-    marginBottom: 16,
-  },
-  layout: {
-    display: 'flex',
-    gap: 20,
-    alignItems: 'flex-start',
-  },
-  monthNav: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  monthLabel: {
-    fontFamily: 'var(--font-mono)',
-    fontSize: '14px',
-    fontWeight: '500',
-    color: 'var(--text-primary)',
-  },
-  statsStrip: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 16,
-    background: 'var(--bg)',
-    borderRadius: 'var(--radius)',
-    padding: '10px 16px',
-    marginBottom: 20,
-  },
-  stripItem: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 6,
-  },
-  stripNum: {
-    fontFamily: 'var(--font-mono)',
-    fontSize: '20px',
-    fontWeight: '500',
-    color: 'var(--accent)',
-  },
-  stripLabel: {
-    fontSize: '11px',
-    color: 'var(--text-muted)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-  },
-  stripDivider: {
-    width: 1,
-    height: 20,
-    background: 'var(--border)',
-  },
-  calGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gap: 4,
-  },
-  dayHeader: {
-    textAlign: 'center',
-    fontFamily: 'var(--font-mono)',
-    fontSize: '10px',
-    color: 'var(--text-muted)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    padding: '0 0 8px 0',
-  },
-  cell: {
-    aspectRatio: '1',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 6,
-    background: 'var(--bg)',
-    border: '1px solid transparent',
-    position: 'relative',
-    transition: 'all 0.1s ease',
-    gap: 2,
-  },
-  cellLogged: {
-    background: 'var(--green-dim)',
-    border: '1px solid rgba(61,214,140,0.25)',
-  },
-  cellToday: {
-    border: '1px solid var(--accent)',
-    background: 'var(--accent-dim)',
-  },
-  cellSelected: {
-    border: '1px solid var(--blue)',
-    background: 'var(--blue-dim)',
-  },
-  cellFuture: {
-    opacity: 0.3,
-  },
-  cellNum: {
-    fontFamily: 'var(--font-mono)',
-    fontSize: '12px',
-    color: 'var(--text-primary)',
-  },
-  cellDot: {
-    width: 4,
-    height: 4,
-    borderRadius: '50%',
-    background: 'var(--green)',
-  },
-  legend: {
-    display: 'flex',
-    gap: 16,
-    marginTop: 16,
-    paddingTop: 16,
-    borderTop: '1px solid var(--border)',
-  },
-  legendItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    fontSize: '11px',
-    color: 'var(--text-muted)',
-    fontFamily: 'var(--font-mono)',
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  detailPanel: {
-    width: 280,
-    flexShrink: 0,
-    minHeight: 200,
-  },
-  detailEmpty: {
-    height: '100%',
-    minHeight: 200,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    color: 'var(--text-muted)',
-    fontSize: '13px',
-    textAlign: 'center',
-    lineHeight: '1.6',
-    background: 'var(--bg-card)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-lg)',
-    padding: 24,
-  },
-  logContent: {
-    fontSize: '13px',
-    lineHeight: '1.75',
-    color: 'var(--text-primary)',
-    whiteSpace: 'pre-wrap',
-  },
-  editedNote: {
-    marginTop: 12,
-    fontSize: '11px',
-    color: 'var(--text-muted)',
-    fontFamily: 'var(--font-mono)',
-  },
+  backRow: { marginBottom: 16 },
+  layout: { display: 'flex', gap: 20, alignItems: 'flex-start' },
+  monthNav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  monthLabel: { fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: '500', color: 'var(--text-primary)' },
+  statsStrip: { display: 'flex', alignItems: 'center', gap: 16, background: 'var(--bg)', borderRadius: 'var(--radius)', padding: '10px 16px', marginBottom: 20 },
+  stripItem: { display: 'flex', alignItems: 'baseline', gap: 6 },
+  stripNum: { fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: '500', color: 'var(--accent)' },
+  stripLabel: { fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  stripDivider: { width: 1, height: 20, background: 'var(--border)' },
+  calGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 },
+  dayHeader: { textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0 0 8px 0' },
+  cell: { aspectRatio: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 6, background: 'var(--bg)', border: '1px solid transparent', position: 'relative', transition: 'all 0.1s ease', gap: 2 },
+  cellLogged: { background: 'var(--green-dim)', border: '1px solid rgba(61,214,140,0.25)' },
+  cellToday: { border: '1px solid var(--accent)', background: 'var(--accent-dim)' },
+  cellSelected: { border: '1px solid var(--blue)', background: 'var(--blue-dim)' },
+  cellFuture: { opacity: 0.3 },
+  cellNum: { fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-primary)' },
+  cellDot: { width: 4, height: 4, borderRadius: '50%', background: 'var(--green)' },
+  legend: { display: 'flex', gap: 16, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' },
+  legendItem: { display: 'flex', alignItems: 'center', gap: 6, fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' },
+  legendDot: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
+  detailPanel: { width: 280, flexShrink: 0, minHeight: 200 },
+  detailEmpty: { height: '100%', minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', lineHeight: '1.6', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 24 },
+  logContent: { fontSize: '13px', lineHeight: '1.75', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' },
+  editedNote: { marginTop: 12, fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' },
 };

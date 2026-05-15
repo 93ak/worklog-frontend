@@ -418,3 +418,40 @@ tbody td {
 .mt-8 { margin-top: 8px; }
 .mt-16 { margin-top: 16px; }
 .mb-16 { margin-bottom: 16px; }
+
+/* ── Date picker (native input colorscheme) ────────────────────────────────── */
+input[type="date"] {
+  color-scheme: dark;
+}
+
+/* ── Drill-down panel hover states ─────────────────────────────────────────── */
+.drill-emp-row:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-light);
+}
+
+/* ── Modal overlay ─────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Analytics modal animation */
+.modal-overlay { animation: fadeIn 0.15s ease; }
+.modal-box { animation: slideUp 0.18s ease; }
+
+/* ── Responsive adjustments ────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .summary-grid-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .main-content { padding: 20px 16px; }
+}

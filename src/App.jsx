@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { DateRangeProvider } from './context/DateRangeContext';
 import Navbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
 import EmployeeDashboard from './pages/EmployeeDashboard';
@@ -50,15 +51,13 @@ function AppRoutes() {
             path="/login"
             element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace /> : <LoginPage />}
           />
-          <Route 
-            path="/forgot-password"       
-            element={user ? <Navigate to={'admin' ? '/admin' : '/dashboard'} replace /> : <ForgotPasswordPage />
-            } 
+          <Route
+            path="/forgot-password"
+            element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace /> : <ForgotPasswordPage />}
           />
-          <Route 
+          <Route
             path="/reset-password/:token"
-            element={user ? <Navigate to={'admin' ? '/admin' : '/dashboard'} replace /> : <ResetPasswordPage />
-            } 
+            element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} replace /> : <ResetPasswordPage />}
           />
           <Route
             path="/dashboard"
@@ -100,7 +99,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        {/* DateRangeProvider wraps the whole app so range persists across navigation */}
+        <DateRangeProvider>
+          <AppRoutes />
+        </DateRangeProvider>
       </AuthProvider>
     </BrowserRouter>
   );
