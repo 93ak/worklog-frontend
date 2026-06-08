@@ -28,6 +28,9 @@ export default function AdminDashboard() {
   // Analytics modal
   const [analyticsId, setAnalyticsId] = useState(null);
 
+  // Log preview modal: { emp, log | null, date }
+  const [logPreview, setLogPreview] = useState(null);
+
   // ── Fetch overview whenever date range changes ─────────────────────────────
   const fetchOverview = useCallback(async () => {
     setLoading(true);
@@ -56,8 +59,20 @@ export default function AdminDashboard() {
     : 0;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  function handleEmployeeClick(empId) {
-    setAnalyticsId(empId);
+  async function handleEmployeeClick(emp) {
+    try {
+      const date = isSingleDay ? range.start : range.end;
+      const res = await adminAPI.getDayDrillDown(date);
+      const submitted = res.submitted.find((s) => s._id === emp._id);
+      setLogPreview({
+        emp,
+        log: submitted?.log || null,
+        date,
+      });
+    } catch {
+      // fallback: just show no log
+      setLogPreview({ emp, log: null, date: range.end });
+    }
   }
 
   function handleDrillClose() {
@@ -69,6 +84,17 @@ export default function AdminDashboard() {
 
   return (
     <>
+      {/* Log preview modal */}
+      {logPreview && (
+        <LogPreviewModal
+          emp={logPreview.emp}
+          log={logPreview.log}
+          date={logPreview.date}
+          onClose={() => setLogPreview(null)}
+          onAnalytics={(id) => { setLogPreview(null); setAnalyticsId(id); }}
+        />
+      )}
+
       {/* Analytics modal */}
       {analyticsId && (
         <EmployeeAnalyticsModal
@@ -162,7 +188,7 @@ export default function AdminDashboard() {
                   {filtered.map((emp) => (
                     <tr
                       key={emp._id}
-                      onClick={() => handleEmployeeClick(emp._id)}
+                      onClick={() => handleEmployeeClick(emp)}
                       style={{ cursor: 'pointer' }}
                     >
                       <td>
@@ -208,7 +234,7 @@ export default function AdminDashboard() {
                             className="btn btn-ghost btn-sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleEmployeeClick(emp._id);
+                              setAnalyticsId(emp._id);
                             }}
                           >
                             Analytics
@@ -254,6 +280,187 @@ export default function AdminDashboard() {
     </>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LogPreviewModal — shows a single employee's log for a specific date
+// ─────────────────────────────────────────────────────────────────────────────
+
+function LogPreviewModal({ emp, log, date, onClose, onAnalytics }) {
+  const name = emp.displayName || emp.username;
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  return (
+    <div style={modalStyles.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={modalStyles.box}>
+        {/* Header */}
+        <div style={modalStyles.header}>
+          <div style={modalStyles.empRow}>
+            <div style={modalStyles.avatar}>
+              {name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div style={modalStyles.name}>{name}</div>
+              <div style={modalStyles.sub} className="mono">
+                @{emp.username} · {date}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => onAnalytics(emp._id)}
+            >
+              📊 Analytics
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={onClose}
+              style={{ fontSize: 20, lineHeight: 1, padding: '4px 8px' }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        <div style={modalStyles.divider} />
+
+        {/* Log content */}
+        {log ? (
+          <div style={modalStyles.logWrap}>
+            <div style={modalStyles.logMeta}>
+              <span className="badge badge-green">
+                <span className="status-dot green" />
+                Submitted
+              </span>
+              <span style={modalStyles.timestamp} className="mono">
+                {new Date(log.createdAt).toLocaleTimeString('en-US', {
+                  hour: '2-digit', minute: '2-digit',
+                })}
+              </span>
+            </div>
+            <p style={modalStyles.logContent}>{log.content}</p>
+          </div>
+        ) : (
+          <div style={modalStyles.empty}>
+            <span style={{ fontSize: 32, opacity: 0.3 }}>📭</span>
+            <p style={modalStyles.emptyText}>No log submitted for this date.</p>
+            <span className="badge badge-red">
+              <span className="status-dot red" />
+              Missing
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const modalStyles = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.55)',
+    backdropFilter: 'blur(2px)',
+    zIndex: 300,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  box: {
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border-light)',
+    borderRadius: 'var(--radius-lg)',
+    boxShadow: 'var(--shadow)',
+    width: '100%',
+    maxWidth: 480,
+    padding: 24,
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 16,
+    marginBottom: 16,
+  },
+  empRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: '50%',
+    background: 'var(--accent-dim)',
+    border: '1px solid var(--accent-border)',
+    color: 'var(--accent)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '16px',
+    fontWeight: '500',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  name: {
+    fontSize: '15px',
+    fontWeight: '600',
+    color: 'var(--text-primary)',
+  },
+  sub: {
+    fontSize: '11px',
+    color: 'var(--text-muted)',
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    background: 'var(--border)',
+    margin: '0 0 20px 0',
+  },
+  logWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  logMeta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  },
+  timestamp: {
+    fontSize: '11px',
+    color: 'var(--text-muted)',
+  },
+  logContent: {
+    fontSize: '13px',
+    lineHeight: '1.75',
+    color: 'var(--text-primary)',
+    whiteSpace: 'pre-wrap',
+    background: 'var(--bg)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    padding: '14px 16px',
+    margin: 0,
+  },
+  empty: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 12,
+    padding: '32px 0',
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: '13px',
+    color: 'var(--text-muted)',
+    margin: 0,
+  },
+};
 
 const styles = {
   pageTop: {
