@@ -92,6 +92,7 @@ export default function AdminDashboard() {
           date={logPreview.date}
           onClose={() => setLogPreview(null)}
           onAnalytics={(id) => { setLogPreview(null); setAnalyticsId(id); }}
+          onProfile={(id) => { setLogPreview(null); navigate(`/admin/employee/${id}`); }}
         />
       )}
 
@@ -150,7 +151,7 @@ export default function AdminDashboard() {
               <div className="card-title">Employees</div>
               <div className="card-subtitle">
                 {isSingleDay
-                  ? 'Click a row to open analytics · Click a date on the calendar for drill-down'
+                  ? 'Click a row to view their log · Use See Profile or Analytics for more'
                   : `Showing any submission within ${rangeLabel}`}
               </div>
             </div>
@@ -228,7 +229,7 @@ export default function AdminDashboard() {
                               navigate(`/admin/employee/${emp._id}`);
                             }}
                           >
-                            Calendar
+                            See Profile
                           </button>
                           <button
                             className="btn btn-ghost btn-sm"
@@ -285,7 +286,7 @@ export default function AdminDashboard() {
 // LogPreviewModal — shows a single employee's log for a specific date
 // ─────────────────────────────────────────────────────────────────────────────
 
-function LogPreviewModal({ emp, log, date, onClose, onAnalytics }) {
+function LogPreviewModal({ emp, log, date, onClose, onAnalytics, onProfile }) {
   const name = emp.displayName || emp.username;
 
   useEffect(() => {
@@ -312,6 +313,12 @@ function LogPreviewModal({ emp, log, date, onClose, onAnalytics }) {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               className="btn btn-secondary btn-sm"
+              onClick={() => onProfile(emp._id)}
+            >
+              See Profile
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
               onClick={() => onAnalytics(emp._id)}
             >
               📊 Analytics

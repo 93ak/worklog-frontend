@@ -1,9 +1,6 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// api.js — centralised Axios-free fetch wrapper
-// ─────────────────────────────────────────────────────────────────────────────
-
 const API_BASE =
   (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
+
 function getToken() {
   return localStorage.getItem('wl_token');
 }
@@ -28,7 +25,6 @@ async function request(path, options = {}) {
   return data;
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
 export const authAPI = {
   login: (username, password) =>
     request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
@@ -39,7 +35,6 @@ export const authAPI = {
     request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
 };
 
-// ── Logs ──────────────────────────────────────────────────────────────────────
 export const logsAPI = {
   getMyLogs: () => request('/logs/me'),
   createLog: (date, content) =>
@@ -48,12 +43,7 @@ export const logsAPI = {
     request(`/logs/${id}`, { method: 'PUT', body: JSON.stringify({ content }) }),
 };
 
-// ── Admin ─────────────────────────────────────────────────────────────────────
 export const adminAPI = {
-  /**
-   * Fetch overview. Accepts optional { start, end } date range strings.
-   * Defaults to today on the backend.
-   */
   getOverview: ({ start, end } = {}) => {
     const params = new URLSearchParams();
     if (start) params.set('start', start);
@@ -61,15 +51,17 @@ export const adminAPI = {
     const qs = params.toString() ? `?${params.toString()}` : '';
     return request(`/admin/overview${qs}`);
   },
-
-  /** Full log list for CalendarView */
   getUserLogs: (userId) => request(`/admin/user/${userId}/logs`),
-
-  /** Drill-down for a specific YYYY-MM-DD date */
+  getUserLogsPaged: (userId, page = 1, limit = 20, date = null) => {
+    const params = new URLSearchParams({ page, limit });
+    if (date) params.set('date', date);
+    return request(`/admin/user/${userId}/logs/paged?${params.toString()}`);
+  },
   getDayDrillDown: (date) => request(`/admin/day/${date}`),
-
-  /** Per-employee analytics */
   getEmployeeAnalytics: (userId) => request(`/admin/user/${userId}/analytics`),
-  getAllLogs: (page = 1, limit = 30) =>
-  request(`/admin/logs/all?page=${page}&limit=${limit}`),
+  getAllLogs: (page = 1, limit = 30, date = null) => {
+    const params = new URLSearchParams({ page, limit });
+    if (date) params.set('date', date);
+    return request(`/admin/logs/all?${params.toString()}`);
+  },
 };
