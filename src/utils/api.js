@@ -70,4 +70,6 @@ export const adminAPI = {
 
   /** Per-employee analytics */
   getEmployeeAnalytics: (userId) => request(`/admin/user/${userId}/analytics`),
+  getAllLogs: (page = 1, limit = 30) =>
+  request(`/admin/logs/all?page=${page}&limit=${limit}`),
 };

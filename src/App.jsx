@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import CalendarView from './pages/CalendarView';
+import AllLogsPage from './pages/AllLogsPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 
@@ -76,6 +77,14 @@ function AppRoutes() {
             }
           />
           <Route
+            path="/admin/logs"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AllLogsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/employee/:id"
             element={
               <ProtectedRoute requiredRole="admin">
@@ -99,7 +108,6 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        {/* DateRangeProvider wraps the whole app so range persists across navigation */}
         <DateRangeProvider>
           <AppRoutes />
         </DateRangeProvider>
