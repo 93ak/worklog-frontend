@@ -1,549 +1,354 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AdminDashboard.jsx — Team overview with date range, drill-down, analytics
+// AllLogsPage.jsx — Paginated feed of every log, with date filter
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI } from '../utils/api';
-import { useDateRange } from '../context/DateRangeContext';
-import { useFilter } from '../hooks/useFilter';
-import { formatRangeLabel, todayStr } from '../utils/dateRange';
-import DateRangePicker from '../components/DateRangePicker';
-import SearchFilter from '../components/SearchFilter';
-import DayDrillDown from '../components/DayDrillDown';
-import EmployeeAnalyticsModal from '../components/EmployeeAnalyticsModal';
-import MyLogPanel from '../components/MyLogPanel';
 
-export default function AdminDashboard() {
-  const navigate = useNavigate();
-  const { range } = useDateRange();
-
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  // Drill-down: selected date for day detail panel
-  const [drillDate, setDrillDate] = useState(null);
-
-  // Analytics modal
-  const [analyticsId, setAnalyticsId] = useState(null);
-
-  // Log preview modal: { emp, log | null, date }
-  const [logPreview, setLogPreview] = useState(null);
-
-  // ── Fetch overview whenever date range changes ─────────────────────────────
-  const fetchOverview = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await adminAPI.getOverview({ start: range.start, end: range.end });
-      setData(res);
-    } catch (err) {
-      setError(err.message || 'Failed to load overview');
-    } finally {
-      setLoading(false);
-    }
-  }, [range.start, range.end]);
-
-  useEffect(() => {
-    fetchOverview();
-  }, [fetchOverview]);
-
-  // ── Employee list + filter ─────────────────────────────────────────────────
-  const employees = data?.employees || [];
-  const { search, setSearch, status, setStatus, filtered, counts } = useFilter(employees);
-
-  const submittedCount = counts.submitted;
-  const submittedPct = employees.length
-    ? Math.round((submittedCount / employees.length) * 100)
-    : 0;
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
-  async function handleEmployeeClick(emp) {
-    try {
-      const date = isSingleDay ? range.start : range.end;
-      const res = await adminAPI.getDayDrillDown(date);
-      const submitted = res.submitted.find((s) => s._id === emp._id);
-      setLogPreview({
-        emp,
-        log: submitted?.log || null,
-        date,
-      });
-    } catch {
-      // fallback: just show no log
-      setLogPreview({ emp, log: null, date: range.end });
-    }
-  }
-
-  function handleDrillClose() {
-    setDrillDate(null);
-  }
-
-  const isSingleDay = range.start === range.end;
-  const rangeLabel = formatRangeLabel(range.start, range.end);
-
-  return (
-    <>
-      {/* Log preview modal */}
-      {logPreview && (
-        <LogPreviewModal
-          emp={logPreview.emp}
-          log={logPreview.log}
-          date={logPreview.date}
-          onClose={() => setLogPreview(null)}
-          onAnalytics={(id) => { setLogPreview(null); setAnalyticsId(id); }}
-          onProfile={(id) => { setLogPreview(null); navigate(`/admin/employee/${id}`); }}
-        />
-      )}
-
-      {/* Analytics modal */}
-      {analyticsId && (
-        <EmployeeAnalyticsModal
-          employeeId={analyticsId}
-          onClose={() => setAnalyticsId(null)}
-        />
-      )}
-
-      {/* Page header with date range picker */}
-      <div style={styles.pageTop}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1>Team Overview</h1>
-          <p className="mono">{rangeLabel} — Submission status</p>
-        </div>
-        <DateRangePicker />
-      </div>
-
-      {error && <div className="alert alert-error" style={{ marginTop: 16 }}>{error}</div>}
-
-      {/* Summary cards */}
-      <div style={styles.summaryGrid}>
-        <div style={styles.summaryCard}>
-          <span style={styles.summaryNum}>{employees.length}</span>
-          <span style={styles.summaryLabel}>Total employees</span>
-        </div>
-        <div style={{ ...styles.summaryCard, borderColor: 'rgba(61,214,140,0.3)' }}>
-          <span style={{ ...styles.summaryNum, color: 'var(--green)' }}>{submittedCount}</span>
-          <span style={styles.summaryLabel}>Submitted</span>
-        </div>
-        <div style={{ ...styles.summaryCard, borderColor: 'rgba(247,111,111,0.3)' }}>
-          <span style={{ ...styles.summaryNum, color: 'var(--red)' }}>{counts.missing}</span>
-          <span style={styles.summaryLabel}>Not submitted</span>
-        </div>
-        <div style={{ ...styles.summaryCard, borderColor: 'rgba(245,166,35,0.3)' }}>
-          <span style={{ ...styles.summaryNum, color: 'var(--accent)' }}>{submittedPct}%</span>
-          <span style={styles.summaryLabel}>Completion rate</span>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      {employees.length > 0 && (
-        <div style={styles.progressWrap}>
-          <div style={{ ...styles.progressBar, width: `${submittedPct}%` }} />
-        </div>
-      )}
-
-      {/* Main layout: table + optional drill-down panel + my log panel */}
-      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-        {/* Employee table */}
-        <div className="card" style={{ flex: 1, minWidth: 0 }}>
-          <div className="card-header" style={{ flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <div className="card-title">Employees</div>
-              <div className="card-subtitle">
-                {isSingleDay
-                  ? 'Click a row to view their log · Use See Profile or Analytics for more'
-                  : `Showing any submission within ${rangeLabel}`}
-              </div>
-            </div>
-            <SearchFilter
-              search={search}
-              onSearch={setSearch}
-              status={status}
-              onStatus={setStatus}
-              counts={counts}
-            />
-          </div>
-
-          {loading ? (
-            <div className="loading-center">
-              <div className="spinner" />
-              <span>Loading team data…</span>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">👥</div>
-              <p>No employees found for this filter.</p>
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th>Username</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((emp) => (
-                    <tr
-                      key={emp._id}
-                      onClick={() => handleEmployeeClick(emp)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td>
-                        <div style={styles.empName}>
-                          <div style={styles.avatar}>
-                            {(emp.displayName || emp.username).charAt(0).toUpperCase()}
-                          </div>
-                          <span className="fw-500">
-                            {emp.displayName || emp.username}
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="mono text-secondary" style={{ fontSize: 12 }}>
-                          {emp.username}
-                        </span>
-                      </td>
-                      <td>
-                        {emp.submittedToday ? (
-                          <span className="badge badge-green">
-                            <span className="status-dot green" />
-                            Submitted
-                          </span>
-                        ) : (
-                          <span className="badge badge-red">
-                            <span className="status-dot red" />
-                            Missing
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/admin/employee/${emp._id}`);
-                            }}
-                          >
-                            See Profile
-                          </button>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAnalyticsId(emp._id);
-                            }}
-                          >
-                            Analytics
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Today drill-down shortcut — only when single day selected */}
-          {isSingleDay && !loading && (
-            <div style={styles.drillShortcut}>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => setDrillDate(range.start)}
-                style={{ fontSize: '12px', color: 'var(--accent)' }}
-              >
-                📅 View {range.start === todayStr() ? "today's" : rangeLabel} submission detail
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Day drill-down panel */}
-        {drillDate && (
-          <DayDrillDown
-            date={drillDate}
-            onClose={handleDrillClose}
-            onEmployeeClick={(id) => {
-              handleDrillClose();
-              setAnalyticsId(id);
-            }}
-          />
-        )}
-
-        {/* Admin's own log panel */}
-        <MyLogPanel />
-      </div>
-    </>
-  );
+function formatFullDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LogPreviewModal — shows a single employee's log for a specific date
-// ─────────────────────────────────────────────────────────────────────────────
+function formatTime(isoStr) {
+  return new Date(isoStr).toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+  });
+}
 
-function LogPreviewModal({ emp, log, date, onClose, onAnalytics, onProfile }) {
-  const name = emp.displayName || emp.username;
+function formatEditedAt(isoStr) {
+  return new Date(isoStr).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  });
+}
 
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
+function wasEdited(log) {
+  return new Date(log.updatedAt) - new Date(log.createdAt) > 2000;
+}
+
+// ── Log Card ──────────────────────────────────────────────────────────────────
+function LogCard({ log, onProfileClick }) {
+  const user = log.userId;
+  const name = user?.displayName || user?.username || 'Unknown';
+  const edited = wasEdited(log);
 
   return (
-    <div style={modalStyles.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={modalStyles.box}>
-        {/* Header */}
-        <div style={modalStyles.header}>
-          <div style={modalStyles.empRow}>
-            <div style={modalStyles.avatar}>
-              {name.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <div style={modalStyles.name}>{name}</div>
-              <div style={modalStyles.sub} className="mono">
-                @{emp.username} · {date}
-              </div>
-            </div>
+    <div style={cardStyles.card}>
+      <div style={cardStyles.header}>
+        <div style={cardStyles.left}>
+          <div style={cardStyles.avatar} onClick={() => onProfileClick(user?._id)} title="View profile">
+            {name.charAt(0).toUpperCase()}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => onProfile(emp._id)}
-            >
-              See Profile
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => onAnalytics(emp._id)}
-            >
-              📊 Analytics
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={onClose}
-              style={{ fontSize: 20, lineHeight: 1, padding: '4px 8px' }}
-            >
-              ×
-            </button>
+          <div style={cardStyles.identity}>
+            <div style={cardStyles.nameRow}>
+              <span style={cardStyles.name} onClick={() => onProfileClick(user?._id)}>
+                {name}
+              </span>
+              {user?.role === 'admin' && (
+                <span style={cardStyles.rolePill}>admin</span>
+              )}
+            </div>
+            <span style={cardStyles.username} className="mono">@{user?.username}</span>
           </div>
         </div>
-
-        <div style={modalStyles.divider} />
-
-        {/* Log content */}
-        {log ? (
-          <div style={modalStyles.logWrap}>
-            <div style={modalStyles.logMeta}>
-              <span className="badge badge-green">
-                <span className="status-dot green" />
-                Submitted
-              </span>
-              <span style={modalStyles.timestamp} className="mono">
-                {new Date(log.createdAt).toLocaleTimeString('en-US', {
-                  hour: '2-digit', minute: '2-digit',
-                })}
-              </span>
-            </div>
-            <p style={modalStyles.logContent}>{log.content}</p>
-          </div>
-        ) : (
-          <div style={modalStyles.empty}>
-            <span style={{ fontSize: 32, opacity: 0.3 }}>📭</span>
-            <p style={modalStyles.emptyText}>No log submitted for this date.</p>
-            <span className="badge badge-red">
-              <span className="status-dot red" />
-              Missing
-            </span>
-          </div>
-        )}
+        <div style={cardStyles.dateBlock}>
+          <span style={cardStyles.dateMain}>{formatFullDate(log.date)}</span>
+          <span style={cardStyles.dateTime} className="mono">
+            Submitted at {formatTime(log.createdAt)}
+          </span>
+        </div>
       </div>
+
+      <div style={cardStyles.divider} />
+
+      <p style={cardStyles.content}>{log.content}</p>
+
+      {edited && (
+        <div style={cardStyles.footer}>
+          <span style={cardStyles.editedBadge}>
+            ✎ Edited · {formatEditedAt(log.updatedAt)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
-const modalStyles = {
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.55)',
-    backdropFilter: 'blur(2px)',
-    zIndex: 300,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  box: {
+const cardStyles = {
+  card: {
     background: 'var(--bg-card)',
     border: '1px solid var(--border-light)',
     borderRadius: 'var(--radius-lg)',
-    boxShadow: 'var(--shadow)',
-    width: '100%',
-    maxWidth: 480,
-    padding: 24,
+    padding: '20px 24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
   },
   header: {
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 16,
-    marginBottom: 16,
+    flexWrap: 'wrap',
   },
-  empRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-  },
+  left: { display: 'flex', alignItems: 'center', gap: 12 },
   avatar: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: '50%',
     background: 'var(--accent-dim)',
     border: '1px solid var(--accent-border)',
     color: 'var(--accent)',
     fontFamily: 'var(--font-mono)',
     fontSize: '16px',
-    fontWeight: '500',
+    fontWeight: '600',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    cursor: 'pointer',
   },
+  identity: { display: 'flex', flexDirection: 'column', gap: 3 },
+  nameRow: { display: 'flex', alignItems: 'center', gap: 8 },
   name: {
     fontSize: '15px',
     fontWeight: '600',
     color: 'var(--text-primary)',
+    cursor: 'pointer',
   },
-  sub: {
+  rolePill: {
+    fontSize: '9px',
+    fontFamily: 'var(--font-mono)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.07em',
+    padding: '2px 6px',
+    borderRadius: 99,
+    background: 'var(--accent-dim)',
+    color: 'var(--accent)',
+    border: '1px solid var(--accent-border)',
+  },
+  username: { fontSize: '12px', color: 'var(--text-muted)' },
+  dateBlock: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 },
+  dateMain: { fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.01em' },
+  dateTime: { fontSize: '11px', color: 'var(--text-muted)' },
+  divider: { height: 1, background: 'var(--border)' },
+  content: { fontSize: '13px', lineHeight: '1.8', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', margin: 0 },
+  footer: { paddingTop: 2 },
+  editedBadge: {
     fontSize: '11px',
-    color: 'var(--text-muted)',
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    background: 'var(--border)',
-    margin: '0 0 20px 0',
-  },
-  logWrap: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  },
-  logMeta: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-  },
-  timestamp: {
-    fontSize: '11px',
-    color: 'var(--text-muted)',
-  },
-  logContent: {
-    fontSize: '13px',
-    lineHeight: '1.75',
-    color: 'var(--text-primary)',
-    whiteSpace: 'pre-wrap',
-    background: 'var(--bg)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    padding: '14px 16px',
-    margin: 0,
-  },
-  empty: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 12,
-    padding: '32px 0',
-    textAlign: 'center',
-  },
-  emptyText: {
-    fontSize: '13px',
-    color: 'var(--text-muted)',
-    margin: 0,
+    fontFamily: 'var(--font-mono)',
+    color: 'var(--accent)',
+    background: 'var(--accent-dim)',
+    border: '1px solid var(--accent-border)',
+    borderRadius: 99,
+    padding: '3px 10px',
   },
 };
 
-const styles = {
-  pageTop: {
+// ── Pagination ────────────────────────────────────────────────────────────────
+function Pagination({ pagination, onPage }) {
+  const { page, totalPages, total, limit, hasNext, hasPrev } = pagination;
+  const from = (page - 1) * limit + 1;
+  const to = Math.min(page * limit, total);
+  return (
+    <div style={pgStyles.wrap}>
+      <span style={pgStyles.info} className="mono">
+        {total === 0 ? 'No results' : `Showing ${from}–${to} of ${total} logs`}
+      </span>
+      <div style={pgStyles.controls}>
+        <button className="btn btn-secondary btn-sm" onClick={() => onPage(page - 1)} disabled={!hasPrev}>
+          ← Previous
+        </button>
+        <span style={pgStyles.pageNum} className="mono">Page {page} of {totalPages || 1}</span>
+        <button className="btn btn-secondary btn-sm" onClick={() => onPage(page + 1)} disabled={!hasNext}>
+          Next →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const pgStyles = {
+  wrap: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 0 4px', flexWrap: 'wrap', gap: 12 },
+  info: { fontSize: '12px', color: 'var(--text-muted)' },
+  controls: { display: 'flex', alignItems: 'center', gap: 10 },
+  pageNum: { fontSize: '12px', color: 'var(--text-secondary)', minWidth: 80, textAlign: 'center' },
+};
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+export default function AllLogsPage() {
+  const navigate = useNavigate();
+  const [data, setData] = useState(null);
+  const [page, setPage] = useState(1);
+  const [dateFilter, setDateFilter] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const fetchLogs = useCallback(async (p, date) => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await adminAPI.getAllLogs(p, 30, date || null);
+      setData(res);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      setError(err.message || 'Failed to load logs');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLogs(page, dateFilter);
+  }, [page, dateFilter, fetchLogs]);
+
+  function handleDateChange(e) {
+    setDateFilter(e.target.value);
+    setPage(1);
+  }
+
+  function clearDate() {
+    setDateFilter('');
+    setPage(1);
+  }
+
+  return (
+    <>
+      <div style={pageStyles.topRow}>
+        <div>
+          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/admin')} style={{ marginBottom: 12 }}>
+            ← Back to dashboard
+          </button>
+          <h1 style={pageStyles.title}>All Logs</h1>
+          <p style={pageStyles.subtitle} className="mono">
+            Every submission across the team · newest first
+          </p>
+        </div>
+        {data?.pagination && (
+          <div style={pageStyles.totalPill} className="mono">
+            {data.pagination.total} {dateFilter ? 'matching' : 'total'} entries
+          </div>
+        )}
+      </div>
+
+      {/* Date filter */}
+      <div style={pageStyles.filterRow}>
+        <div style={pageStyles.filterLabel} className="mono">Filter by date</div>
+        <div style={pageStyles.filterInputWrap}>
+          <input
+            type="date"
+            value={dateFilter}
+            max={today}
+            onChange={handleDateChange}
+            style={pageStyles.dateInput}
+          />
+          {dateFilter && (
+            <button className="btn btn-ghost btn-sm" onClick={clearDate}>
+              × Clear
+            </button>
+          )}
+        </div>
+        {dateFilter && (
+          <span style={pageStyles.filterActive} className="mono">
+            Showing: {new Date(...dateFilter.split('-').map((n,i)=>i===1?+n-1:+n)).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}
+          </span>
+        )}
+      </div>
+
+      {error && <div className="alert alert-error" style={{ marginBottom: 20 }}>{error}</div>}
+
+      {loading ? (
+        <div className="loading-center" style={{ padding: '60px 0' }}>
+          <div className="spinner" /><span>Loading logs…</span>
+        </div>
+      ) : data?.logs?.length === 0 ? (
+        <div className="empty-state" style={{ padding: '60px 0' }}>
+          <div className="empty-icon">📭</div>
+          <p>{dateFilter ? 'No logs submitted on this date.' : 'No logs have been submitted yet.'}</p>
+          {dateFilter && <button className="btn btn-secondary btn-sm" onClick={clearDate}>Clear filter</button>}
+        </div>
+      ) : (
+        <>
+          {data?.pagination && <Pagination pagination={data.pagination} onPage={(p) => setPage(p)} />}
+          <div style={pageStyles.feed}>
+            {data.logs.map((log) => (
+              <LogCard
+                key={log._id}
+                log={log}
+                onProfileClick={(uid) => uid && navigate(`/admin/employee/${uid}`)}
+              />
+            ))}
+          </div>
+          {data?.pagination && <Pagination pagination={data.pagination} onPage={(p) => setPage(p)} />}
+        </>
+      )}
+    </>
+  );
+}
+
+const pageStyles = {
+  topRow: {
     display: 'flex',
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 20,
     gap: 16,
     flexWrap: 'wrap',
   },
-  summaryGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 16,
-    marginBottom: 16,
+  title: { fontSize: '28px', fontWeight: '600', color: 'var(--text-primary)', margin: '0 0 6px 0', letterSpacing: '-0.02em' },
+  subtitle: { fontSize: '12px', color: 'var(--text-muted)', margin: 0 },
+  totalPill: {
+    fontSize: '12px',
+    color: 'var(--text-muted)',
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border)',
+    borderRadius: 99,
+    padding: '6px 14px',
+    alignSelf: 'flex-start',
   },
-  summaryCard: {
+  filterRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 20,
+    flexWrap: 'wrap',
     background: 'var(--bg-card)',
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius)',
-    padding: '18px 20px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
+    padding: '12px 16px',
   },
-  summaryNum: {
-    fontFamily: 'var(--font-mono)',
-    fontSize: '28px',
-    fontWeight: '500',
-    color: 'var(--text-primary)',
-    lineHeight: 1,
-  },
-  summaryLabel: {
+  filterLabel: {
     fontSize: '11px',
     color: 'var(--text-muted)',
     textTransform: 'uppercase',
-    letterSpacing: '0.06em',
+    letterSpacing: '0.07em',
+    whiteSpace: 'nowrap',
+  },
+  filterInputWrap: { display: 'flex', alignItems: 'center', gap: 8 },
+  dateInput: {
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    color: 'var(--text-primary)',
+    fontSize: '13px',
+    padding: '6px 10px',
     fontFamily: 'var(--font-mono)',
+    outline: 'none',
+    colorScheme: 'dark',
   },
-  progressWrap: {
-    height: 4,
-    background: 'var(--border)',
-    borderRadius: 99,
-    marginBottom: 24,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    background: 'var(--green)',
-    borderRadius: 99,
-    transition: 'width 0.6s ease',
-  },
-  empName: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-  },
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: '50%',
+  filterActive: {
+    fontSize: '12px',
+    color: 'var(--accent)',
     background: 'var(--accent-dim)',
     border: '1px solid var(--accent-border)',
-    color: 'var(--accent)',
-    fontFamily: 'var(--font-mono)',
-    fontSize: '13px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    borderRadius: 99,
+    padding: '3px 10px',
   },
-  drillShortcut: {
-    borderTop: '1px solid var(--border)',
-    padding: '12px 0 0 0',
-    marginTop: 16,
-    textAlign: 'center',
-  },
+  feed: { display: 'flex', flexDirection: 'column', gap: 14, marginTop: 4 },
 };
